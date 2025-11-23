@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: torcida-postgres
+    environment:
+      POSTGRES_USER: torcida_user
+      POSTGRES_PASSWORD: torcida_pass_2024
+      POSTGRES_DB: torcida_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - torcida-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U torcida_user -d torcida_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: node:18-alpine
+    container_name: torcida-backend
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: torcida_db
+      DB_USER: torcida_user
+      DB_PASSWORD: torcida_pass_2024
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-2024
+      PORT: 3000
+      NODE_ENV: development
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+    networks:
+      - torcida-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_node_modules:
+    driver: local
+
+networks:
+  torcida-network:
+    driver: bridge

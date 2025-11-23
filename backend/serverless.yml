@@ -1,0 +1,142 @@
+service: torcida-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+  environment:
+    STAGE: ${self:provider.stage}
+    DB_HOST: ${env:DB_HOST}
+    DB_PORT: ${env:DB_PORT, '5432'}
+    DB_NAME: ${env:DB_NAME}
+    DB_USER: ${env:DB_USER}
+    DB_PASSWORD: ${env:DB_PASSWORD}
+    JWT_SECRET: ${env:JWT_SECRET}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: '*'
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+
+functions:
+  # Auth
+  login:
+    handler: src/handlers/auth.login
+    events:
+      - http:
+          path: /auth/login
+          method: post
+          cors: true
+
+  register:
+    handler: src/handlers/auth.register
+    events:
+      - http:
+          path: /auth/register
+          method: post
+          cors: true
+
+  # Quizzes
+  createQuiz:
+    handler: src/handlers/quiz.create
+    events:
+      - http:
+          path: /quizzes
+          method: post
+          cors: true
+
+  getQuizzes:
+    handler: src/handlers/quiz.list
+    events:
+      - http:
+          path: /quizzes
+          method: get
+          cors: true
+
+  getQuiz:
+    handler: src/handlers/quiz.get
+    events:
+      - http:
+          path: /quizzes/{id}
+          method: get
+          cors: true
+
+  joinQuiz:
+    handler: src/handlers/quiz.join
+    events:
+      - http:
+          path: /quizzes/{code}/join
+          method: post
+          cors: true
+
+  startQuiz:
+    handler: src/handlers/quiz.start
+    events:
+      - http:
+          path: /quizzes/{id}/start
+          method: post
+          cors: true
+
+  # Questions
+  addQuestion:
+    handler: src/handlers/question.add
+    events:
+      - http:
+          path: /quizzes/{quizId}/questions
+          method: post
+          cors: true
+
+  # Answers
+  submitAnswer:
+    handler: src/handlers/answer.submit
+    events:
+      - http:
+          path: /quizzes/{quizId}/answers
+          method: post
+          cors: true
+
+  # Leaderboard
+  getLeaderboard:
+    handler: src/handlers/leaderboard.get
+    events:
+      - http:
+          path: /quizzes/{quizId}/leaderboard
+          method: get
+          cors: true
+
+  # WebSocket for real-time sync
+  websocketConnect:
+    handler: src/handlers/websocket.connect
+    events:
+      - websocket:
+          route: $connect
+
+  websocketDisconnect:
+    handler: src/handlers/websocket.disconnect
+    events:
+      - websocket:
+          route: $disconnect
+
+  websocketDefault:
+    handler: src/handlers/websocket.default
+    events:
+      - websocket:
+          route: $default
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+    websocketPort: 3001
