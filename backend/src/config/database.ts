@@ -1,4 +1,14 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { Pool, PoolConfig } from 'pg';
+
+console.log('📊 DB Config:', {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER
+});
 
 const config: PoolConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -7,8 +17,12 @@ const config: PoolConfig = {
   user: process.env.DB_USER || 'torcida_user',
   password: process.env.DB_PASSWORD || 'torcida_pass_2024',
   max: 20,
+  min: 2,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
+  allowExitOnIdle: false,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 };
 
 export const pool = new Pool(config);

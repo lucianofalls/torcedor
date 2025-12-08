@@ -8,17 +8,40 @@ services:
       POSTGRES_USER: torcida_user
       POSTGRES_PASSWORD: torcida_pass_2024
       POSTGRES_DB: torcida_db
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+      POSTGRES_HOST_AUTH_METHOD: md5
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - torcida-network
+    restart: unless-stopped
+    shm_size: 256mb
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c max_connections=200
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c effective_cache_size=1GB
+      -c checkpoint_timeout=15min
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c log_statement=all
+      -c log_duration=on
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U torcida_user -d torcida_db"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   backend:
     image: node:18-alpine

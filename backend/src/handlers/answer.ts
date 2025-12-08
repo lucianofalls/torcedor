@@ -5,12 +5,8 @@ import { successResponse, errorResponse } from '../utils/response';
 
 export const submit = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
+    // Check if request has token (authenticated) or CPF (anonymous)
     const token = extractToken(event.headers.Authorization || event.headers.authorization);
-    if (!token) {
-      return errorResponse('Token não fornecido', 401);
-    }
-
-    const payload = verifyToken(token);
     const quizId = event.pathParameters?.quizId;
     const body = JSON.parse(event.body || '{}');
 
@@ -18,17 +14,36 @@ export const submit = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
       return errorResponse('ID do quiz não fornecido', 400);
     }
 
-    const { question_id, option_id, time_taken_ms } = body;
+    const { question_id, option_id, time_taken_ms, cpf } = body;
 
     if (!question_id || !option_id || time_taken_ms === undefined) {
       return errorResponse('Dados da resposta incompletos', 400);
     }
 
-    // Verificar se é participante
-    const participantResult = await query(
-      'SELECT * FROM quiz_participants WHERE quiz_id = $1 AND user_id = $2',
-      [quizId, payload.userId]
-    );
+    // Determine if authenticated or anonymous
+    const isAuthenticated = !!token;
+    const isAnonymous = !!cpf;
+
+    if (!isAuthenticated && !isAnonymous) {
+      return errorResponse('Token ou CPF deve ser fornecido', 401);
+    }
+
+    let participantResult;
+
+    if (isAuthenticated) {
+      // Authenticated user - find by user_id
+      const payload = verifyToken(token);
+      participantResult = await query(
+        'SELECT * FROM quiz_participants WHERE quiz_id = $1 AND user_id = $2',
+        [quizId, payload.userId]
+      );
+    } else {
+      // Anonymous user - find by CPF
+      participantResult = await query(
+        'SELECT * FROM quiz_participants WHERE quiz_id = $1 AND cpf = $2',
+        [quizId, cpf]
+      );
+    }
 
     if (participantResult.rows.length === 0) {
       return errorResponse('Você não está participando deste quiz', 403);

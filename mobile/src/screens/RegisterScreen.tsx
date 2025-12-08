@@ -77,6 +77,9 @@ const RegisterScreen: React.FC = () => {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        textContentType="oneTimeCode"
+        autoComplete="off"
+        passwordRules="minlength: 6;"
       />
 
       <TextInput
@@ -85,6 +88,8 @@ const RegisterScreen: React.FC = () => {
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
+        textContentType="oneTimeCode"
+        autoComplete="off"
       />
 
       <TouchableOpacity

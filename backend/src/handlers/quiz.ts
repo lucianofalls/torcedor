@@ -22,8 +22,8 @@ export const create = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
     const code = generateQuizCode();
 
     const result = await query(
-      `INSERT INTO quizzes (creator_id, title, description, code, max_participants)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO quizzes (creator_id, title, description, code, max_participants, status)
+       VALUES ($1, $2, $3, $4, $5, 'inactive')
        RETURNING *`,
       [payload.userId, title, description, code, max_participants]
     );
@@ -63,12 +63,12 @@ export const list = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 
 export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
+    // Permitir acesso com ou sem token (autenticado ou anônimo)
     const token = extractToken(event.headers.Authorization || event.headers.authorization);
-    if (!token) {
-      return errorResponse('Token não fornecido', 401);
+    if (token) {
+      verifyToken(token); // Validate token if provided
     }
 
-    verifyToken(token);
     const quizId = event.pathParameters?.id;
 
     if (!quizId) {
@@ -95,7 +95,8 @@ export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
          json_build_object(
            'id', o.id,
            'option_text', o.option_text,
-           'option_order', o.option_order
+           'option_order', o.option_order,
+           'is_correct', o.is_correct
          ) ORDER BY o.option_order
        ) as options
        FROM questions q
@@ -109,6 +110,8 @@ export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     const quiz = quizResult.rows[0];
     quiz.questions = questionsResult.rows;
 
+    console.log('📋 QUIZ DETAILS:', { id: quiz.id, title: quiz.title, status: quiz.status, questionCount: quiz.questions.length });
+
     return successResponse(quiz);
   } catch (error) {
     console.error('Get quiz error:', error);
@@ -118,26 +121,53 @@ export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
 
 export const join = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const token = extractToken(event.headers.Authorization || event.headers.authorization);
-    if (!token) {
-      return errorResponse('Token não fornecido', 401);
-    }
-
-    const payload = verifyToken(token);
     const code = event.pathParameters?.code;
 
     if (!code) {
       return errorResponse('Código do quiz não fornecido', 400);
     }
 
-    // Buscar quiz pelo código
+    // Parse body to get CPF and name (for anonymous users)
+    const body = event.body ? JSON.parse(event.body) : {};
+    const { cpf, participant_name } = body;
+
+    // Check if it's anonymous participation (has CPF and name) or authenticated
+    const token = extractToken(event.headers.Authorization || event.headers.authorization);
+    const isAnonymous = !token && cpf && participant_name;
+    const isAuthenticated = !!token;
+
+    if (!isAnonymous && !isAuthenticated) {
+      return errorResponse('Forneça o token de autenticação OU CPF e nome para participar', 401);
+    }
+
+    // For anonymous users, validate CPF
+    if (isAnonymous) {
+      const { validateCPF, cleanCPF } = await import('../utils/cpf-validator');
+      const cleanedCPF = cleanCPF(cpf);
+
+      if (!validateCPF(cleanedCPF)) {
+        return errorResponse('CPF inválido', 400);
+      }
+
+      if (!participant_name || participant_name.trim().length < 3) {
+        return errorResponse('Nome deve ter pelo menos 3 caracteres', 400);
+      }
+    }
+
+    let userId = null;
+    if (isAuthenticated) {
+      const payload = verifyToken(token);
+      userId = payload.userId;
+    }
+
+    // Buscar quiz pelo código (aceita active ou in_progress)
     const quizResult = await query(
-      `SELECT * FROM quizzes WHERE code = $1 AND status = 'active'`,
+      `SELECT * FROM quizzes WHERE code = $1 AND status IN ('active', 'in_progress')`,
       [code]
     );
 
     if (quizResult.rows.length === 0) {
-      return errorResponse('Quiz não encontrado ou não está ativo', 404);
+      return errorResponse('Quiz não encontrado ou não está disponível', 404);
     }
 
     const quiz = quizResult.rows[0];
@@ -153,26 +183,52 @@ export const join = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxy
     }
 
     // Verificar se já está participando
-    const existingParticipant = await query(
-      'SELECT id FROM quiz_participants WHERE quiz_id = $1 AND user_id = $2',
-      [quiz.id, payload.userId]
-    );
+    let existingParticipant;
+    if (isAnonymous) {
+      const { cleanCPF } = await import('../utils/cpf-validator');
+      const cleanedCPF = cleanCPF(cpf);
+      existingParticipant = await query(
+        'SELECT id FROM quiz_participants WHERE quiz_id = $1 AND cpf = $2',
+        [quiz.id, cleanedCPF]
+      );
 
-    if (existingParticipant.rows.length > 0) {
-      return successResponse({
-        message: 'Você já está participando deste quiz',
-        participant_id: existingParticipant.rows[0].id,
-        quiz,
-      });
+      if (existingParticipant.rows.length > 0) {
+        return errorResponse('Este CPF já está participando deste quiz', 400);
+      }
+    } else {
+      existingParticipant = await query(
+        'SELECT id FROM quiz_participants WHERE quiz_id = $1 AND user_id = $2',
+        [quiz.id, userId]
+      );
+
+      if (existingParticipant.rows.length > 0) {
+        return successResponse({
+          message: 'Você já está participando deste quiz',
+          participant_id: existingParticipant.rows[0].id,
+          quiz,
+        });
+      }
     }
 
     // Adicionar participante
-    const result = await query(
-      `INSERT INTO quiz_participants (quiz_id, user_id)
-       VALUES ($1, $2)
-       RETURNING *`,
-      [quiz.id, payload.userId]
-    );
+    let result;
+    if (isAnonymous) {
+      const { cleanCPF } = await import('../utils/cpf-validator');
+      const cleanedCPF = cleanCPF(cpf);
+      result = await query(
+        `INSERT INTO quiz_participants (quiz_id, cpf, participant_name)
+         VALUES ($1, $2, $3)
+         RETURNING *`,
+        [quiz.id, cleanedCPF, participant_name.trim()]
+      );
+    } else {
+      result = await query(
+        `INSERT INTO quiz_participants (quiz_id, user_id)
+         VALUES ($1, $2)
+         RETURNING *`,
+        [quiz.id, userId]
+      );
+    }
 
     return successResponse({
       message: 'Você entrou no quiz com sucesso',
@@ -239,5 +295,290 @@ export const start = async (event: APIGatewayProxyEvent): Promise<APIGatewayProx
   } catch (error) {
     console.error('Start quiz error:', error);
     return errorResponse('Erro ao iniciar quiz', 500, error);
+  }
+};
+
+export const update = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const token = extractToken(event.headers.Authorization || event.headers.authorization);
+    if (!token) {
+      return errorResponse('Token não fornecido', 401);
+    }
+
+    const payload = verifyToken(token);
+    const quizId = event.pathParameters?.id;
+
+    if (!quizId) {
+      return errorResponse('ID do quiz não fornecido', 400);
+    }
+
+    const body = JSON.parse(event.body || '{}');
+    const { title, description, max_participants } = body;
+
+    if (!title) {
+      return errorResponse('Título é obrigatório', 400);
+    }
+
+    // Verificar se é o criador e se o quiz está ativo
+    const quizResult = await query(
+      'SELECT * FROM quizzes WHERE id = $1 AND creator_id = $2',
+      [quizId, payload.userId]
+    );
+
+    if (quizResult.rows.length === 0) {
+      return errorResponse('Quiz não encontrado ou você não tem permissão', 403);
+    }
+
+    const quiz = quizResult.rows[0];
+
+    if (quiz.status !== 'active' && quiz.status !== 'inactive') {
+      return errorResponse('Quizzes em andamento ou finalizados não podem ser editados', 400);
+    }
+
+    // Atualizar quiz
+    const result = await query(
+      `UPDATE quizzes
+       SET title = $1, description = $2, max_participants = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [title, description, max_participants, quizId]
+    );
+
+    return successResponse(result.rows[0]);
+  } catch (error) {
+    console.error('Update quiz error:', error);
+    return errorResponse('Erro ao atualizar quiz', 500, error);
+  }
+};
+
+export const remove = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const token = extractToken(event.headers.Authorization || event.headers.authorization);
+    if (!token) {
+      return errorResponse('Token não fornecido', 401);
+    }
+
+    const payload = verifyToken(token);
+    const quizId = event.pathParameters?.id;
+
+    if (!quizId) {
+      return errorResponse('ID do quiz não fornecido', 400);
+    }
+
+    // Verificar se é o criador
+    const quizResult = await query(
+      'SELECT * FROM quizzes WHERE id = $1 AND creator_id = $2',
+      [quizId, payload.userId]
+    );
+
+    if (quizResult.rows.length === 0) {
+      return errorResponse('Quiz não encontrado ou você não tem permissão', 403);
+    }
+
+    const quiz = quizResult.rows[0];
+
+    if (quiz.status !== 'active' && quiz.status !== 'inactive') {
+      return errorResponse('Quizzes em andamento ou finalizados não podem ser excluídos', 400);
+    }
+
+    // Deletar quiz (cascade vai deletar perguntas, opções, participantes, etc)
+    await query('DELETE FROM quizzes WHERE id = $1', [quizId]);
+
+    return successResponse({ message: 'Quiz excluído com sucesso' });
+  } catch (error) {
+    console.error('Delete quiz error:', error);
+    return errorResponse('Erro ao excluir quiz', 500, error);
+  }
+};
+
+export const getParticipantQuizzes = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const cpf = event.pathParameters?.cpf;
+
+    if (!cpf) {
+      return errorResponse('CPF não fornecido', 400);
+    }
+
+    // Validar CPF
+    const { validateCPF, cleanCPF } = await import('../utils/cpf-validator');
+    const cleanedCPF = cleanCPF(cpf);
+
+    if (!validateCPF(cleanedCPF)) {
+      return errorResponse('CPF inválido', 400);
+    }
+
+    // Buscar todos os quizzes que este CPF participou
+    const result = await query(
+      `SELECT
+        q.id,
+        q.title,
+        q.description,
+        q.code,
+        q.status,
+        q.started_at,
+        q.created_at,
+        (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) as question_count,
+        (SELECT COUNT(*) FROM quiz_participants WHERE quiz_id = q.id) as participant_count
+       FROM quizzes q
+       JOIN quiz_participants qp ON q.id = qp.quiz_id
+       WHERE qp.cpf = $1
+       ORDER BY q.created_at DESC`,
+      [cleanedCPF]
+    );
+
+    // Adicionar informação de status para cada quiz
+    const quizzes = result.rows.map(quiz => {
+      let canPlay = false;
+      let statusMessage = '';
+
+      if (quiz.status === 'active' && !quiz.started_at) {
+        statusMessage = 'Aguardando início';
+        canPlay = false;
+      } else if (quiz.status === 'in_progress') {
+        statusMessage = 'Em andamento';
+        canPlay = true;
+      } else if (quiz.status === 'finished') {
+        statusMessage = 'Finalizado';
+        canPlay = false;
+      }
+
+      return {
+        ...quiz,
+        canPlay,
+        statusMessage,
+      };
+    });
+
+    return successResponse(quizzes);
+  } catch (error) {
+    console.error('Get participant quizzes error:', error);
+    return errorResponse('Erro ao buscar quizzes do participante', 500, error);
+  }
+};
+
+export const getQuizStatus = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const quizId = event.pathParameters?.id;
+
+    if (!quizId) {
+      return errorResponse('ID do quiz não fornecido', 400);
+    }
+
+    const result = await query(
+      `SELECT
+        id,
+        title,
+        description,
+        status,
+        started_at,
+        created_at
+       FROM quizzes
+       WHERE id = $1`,
+      [quizId]
+    );
+
+    if (result.rows.length === 0) {
+      return errorResponse('Quiz não encontrado', 404);
+    }
+
+    const quiz = result.rows[0];
+
+    return successResponse({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      status: quiz.status,
+      started_at: quiz.started_at,
+      created_at: quiz.created_at,
+    });
+  } catch (error) {
+    console.error('Get quiz status error:', error);
+    return errorResponse('Erro ao buscar status do quiz', 500, error);
+  }
+};
+
+export const activate = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const token = extractToken(event.headers.Authorization || event.headers.authorization);
+    if (!token) {
+      return errorResponse('Token não fornecido', 401);
+    }
+
+    const payload = verifyToken(token);
+    const quizId = event.pathParameters?.id;
+
+    if (!quizId) {
+      return errorResponse('ID do quiz não fornecido', 400);
+    }
+
+    // Verificar se é o criador e se o quiz está em draft
+    const quizResult = await query(
+      'SELECT * FROM quizzes WHERE id = $1 AND creator_id = $2',
+      [quizId, payload.userId]
+    );
+
+    if (quizResult.rows.length === 0) {
+      return errorResponse('Quiz não encontrado ou você não tem permissão', 403);
+    }
+
+    const quiz = quizResult.rows[0];
+
+    if (quiz.status !== 'inactive') {
+      return errorResponse('Quiz já foi ativado', 400);
+    }
+
+    // Atualizar status para active
+    const result = await query(
+      `UPDATE quizzes
+       SET status = 'active'
+       WHERE id = $1
+       RETURNING *`,
+      [quizId]
+    );
+
+    return successResponse(result.rows[0]);
+  } catch (error) {
+    console.error('Activate quiz error:', error);
+    return errorResponse('Erro ao ativar quiz', 500, error);
+  }
+};
+
+export const finish = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const token = extractToken(event.headers.Authorization || event.headers.authorization);
+    if (!token) {
+      return errorResponse('Token não fornecido', 401);
+    }
+
+    const payload = verifyToken(token);
+    const quizId = event.pathParameters?.id;
+
+    if (!quizId) {
+      return errorResponse('ID do quiz não fornecido', 400);
+    }
+
+    // Verificar se é o criador
+    const quizResult = await query(
+      'SELECT * FROM quizzes WHERE id = $1 AND creator_id = $2',
+      [quizId, payload.userId]
+    );
+
+    if (quizResult.rows.length === 0) {
+      return errorResponse('Quiz não encontrado ou você não tem permissão', 403);
+    }
+
+    // Atualizar status para finished
+    const result = await query(
+      `UPDATE quizzes
+       SET status = 'finished'
+       WHERE id = $1
+       RETURNING *`,
+      [quizId]
+    );
+
+    return successResponse(result.rows[0]);
+  } catch (error) {
+    console.error('Finish quiz error:', error);
+    return errorResponse('Erro ao finalizar quiz', 500, error);
   }
 };

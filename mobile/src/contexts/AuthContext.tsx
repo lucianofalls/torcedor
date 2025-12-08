@@ -41,7 +41,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('[AuthContext] Iniciando login...');
       const response = await api.post('/auth/login', { email, password });
+      console.log('[AuthContext] Login bem-sucedido!', response.data);
       const { token, user } = response.data.data;
 
       await AsyncStorage.setItem('@torcida:token', token);
@@ -50,7 +52,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(token);
       setUser(user);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Erro ao fazer login');
+      console.log('[AuthContext] Erro completo:', error);
+      console.log('[AuthContext] Mensagem:', error.message);
+      console.log('[AuthContext] Response:', error.response);
+      throw new Error(error.response?.data?.message || error.message || 'Erro ao fazer login');
     }
   };
 

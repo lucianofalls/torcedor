@@ -71,3 +71,48 @@ export const add = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     return errorResponse('Erro ao adicionar pergunta', 500, error);
   }
 };
+
+export const remove = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const token = extractToken(event.headers.Authorization || event.headers.authorization);
+    if (!token) {
+      return errorResponse('Token não fornecido', 401);
+    }
+
+    const payload = verifyToken(token);
+    const quizId = event.pathParameters?.quizId;
+    const questionId = event.pathParameters?.questionId;
+
+    if (!quizId || !questionId) {
+      return errorResponse('ID do quiz ou pergunta não fornecido', 400);
+    }
+
+    // Verificar se é o criador do quiz
+    const quizResult = await query(
+      'SELECT * FROM quizzes WHERE id = $1 AND creator_id = $2',
+      [quizId, payload.userId]
+    );
+
+    if (quizResult.rows.length === 0) {
+      return errorResponse('Quiz não encontrado ou você não tem permissão', 403);
+    }
+
+    // Deletar opções primeiro (devido à foreign key)
+    await query('DELETE FROM options WHERE question_id = $1', [questionId]);
+
+    // Deletar pergunta
+    const result = await query(
+      'DELETE FROM questions WHERE id = $1 AND quiz_id = $2 RETURNING *',
+      [questionId, quizId]
+    );
+
+    if (result.rows.length === 0) {
+      return errorResponse('Pergunta não encontrada', 404);
+    }
+
+    return successResponse({ message: 'Pergunta deletada com sucesso' });
+  } catch (error) {
+    console.error('Remove question error:', error);
+    return errorResponse('Erro ao remover pergunta', 500, error);
+  }
+};

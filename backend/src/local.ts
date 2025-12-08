@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import * as authHandlers from './handlers/auth';
@@ -7,7 +10,7 @@ import * as answerHandlers from './handlers/answer';
 import * as leaderboardHandlers from './handlers/leaderboard';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -26,65 +29,109 @@ const createLambdaEvent = (req: express.Request): any => {
 app.post('/auth/login', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await authHandlers.login(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 app.post('/auth/register', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await authHandlers.register(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 // Rotas de quiz
 app.post('/quizzes', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await quizHandlers.create(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 app.get('/quizzes', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await quizHandlers.list(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 app.get('/quizzes/:id', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await quizHandlers.get(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 app.post('/quizzes/:code/join', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await quizHandlers.join(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 app.post('/quizzes/:id/start', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await quizHandlers.start(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
+app.post('/quizzes/:id/activate', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await quizHandlers.activate(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
+app.post('/quizzes/:id/finish', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await quizHandlers.finish(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
+app.put('/quizzes/:id', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await quizHandlers.update(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
+app.delete('/quizzes/:id', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await quizHandlers.remove(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 // Rotas de perguntas
 app.post('/quizzes/:quizId/questions', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await questionHandlers.add(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
+app.delete('/quizzes/:quizId/questions/:questionId', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await questionHandlers.remove(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 // Rotas de respostas
 app.post('/quizzes/:quizId/answers', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await answerHandlers.submit(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 // Rotas de ranking
 app.get('/quizzes/:quizId/leaderboard', async (req, res) => {
   const event = createLambdaEvent(req);
   const result = await leaderboardHandlers.get(event as any);
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
+// Rotas de participantes
+app.get('/participants/:cpf/quizzes', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await quizHandlers.getParticipantQuizzes(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
+// Rota de status do quiz (não precisa auth)
+app.get('/quizzes/:id/status', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await quizHandlers.getQuizStatus(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
 app.listen(PORT, '0.0.0.0', () => {

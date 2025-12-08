@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../config/api';
@@ -25,12 +26,9 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadQuizzes();
-  }, []);
-
-  const loadQuizzes = async () => {
+  const loadQuizzes = useCallback(async () => {
     try {
+      setLoading(true);
       const response = await api.get('/quizzes');
       setQuizzes(response.data.data);
     } catch (error: any) {
@@ -38,27 +36,79 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadQuizzes();
+    }, [loadQuizzes])
+  );
+
+  const handleDeleteQuiz = (quizId: string, quizTitle: string) => {
+    Alert.alert(
+      'Confirmar Exclusão',
+      `Tem certeza que deseja excluir "${quizTitle}"? Esta ação não pode ser desfeita.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/quizzes/${quizId}`);
+              Alert.alert('Sucesso', 'Quiz excluído com sucesso!');
+              loadQuizzes();
+            } catch (error: any) {
+              Alert.alert('Erro', error.response?.data?.message || 'Erro ao excluir quiz');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderQuizItem = ({ item }: { item: Quiz }) => (
-    <TouchableOpacity
-      style={styles.quizCard}
-      onPress={() => navigation.navigate('QuizDetails', { quizId: item.id })}
-    >
-      <Text style={styles.quizTitle}>{item.title}</Text>
-      {item.description && (
-        <Text style={styles.quizDescription}>{item.description}</Text>
+    <View style={styles.quizCard}>
+      <TouchableOpacity
+        style={styles.quizContent}
+        onPress={() => navigation.navigate('QuizDetails', { quizId: item.id })}
+      >
+        <Text style={styles.quizTitle}>{item.title}</Text>
+        {item.description && (
+          <Text style={styles.quizDescription}>{item.description}</Text>
+        )}
+        <View style={styles.quizInfo}>
+          <Text style={styles.quizCode}>Código: {item.code}</Text>
+          <Text style={styles.quizStatus}>Status: {item.status}</Text>
+        </View>
+        {item.participant_count !== undefined && (
+          <Text style={styles.participants}>
+            Participantes: {item.participant_count}/{item.max_participants}
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      {item.status === 'active' && (
+        <View style={styles.quizActions}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => navigation.navigate('EditQuiz', { quizId: item.id })}
+          >
+            <Text style={styles.actionButtonText}>✏️ Editar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteQuiz(item.id, item.title)}
+          >
+            <Text style={styles.actionButtonText}>🗑️ Deletar</Text>
+          </TouchableOpacity>
+        </View>
       )}
-      <View style={styles.quizInfo}>
-        <Text style={styles.quizCode}>Código: {item.code}</Text>
-        <Text style={styles.quizStatus}>Status: {item.status}</Text>
-      </View>
-      {item.participant_count !== undefined && (
-        <Text style={styles.participants}>
-          Participantes: {item.participant_count}/{item.max_participants}
-        </Text>
-      )}
-    </TouchableOpacity>
+    </View>
   );
 
   if (loading) {
@@ -164,9 +214,39 @@ const styles = StyleSheet.create({
   },
   quizCard: {
     backgroundColor: '#fff',
-    padding: 15,
     borderRadius: 8,
     marginBottom: 10,
+    overflow: 'hidden',
+  },
+  quizContent: {
+    padding: 15,
+  },
+  quizActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  editButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   quizTitle: {
     fontSize: 18,

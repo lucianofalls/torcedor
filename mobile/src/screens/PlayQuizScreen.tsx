@@ -12,6 +12,8 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import api from '../config/api';
 import { Quiz, Question, AnswerResult } from '../types';
+import { getAnonymousUser } from '../services/anonymousStorage';
+import { useAuth } from '../contexts/AuthContext';
 
 type PlayQuizScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -27,6 +29,7 @@ interface Props {
 
 const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
   const { quizId } = route.params;
+  const { user } = useAuth();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -35,10 +38,37 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [score, setScore] = useState(0);
+  const [anonymousCpf, setAnonymousCpf] = useState<string | null>(null);
 
   useEffect(() => {
+    loadAnonymousUserIfNeeded();
     loadQuiz();
   }, []);
+
+  const loadAnonymousUserIfNeeded = async () => {
+    if (!user) {
+      const anonymousUser = await getAnonymousUser();
+      if (anonymousUser) {
+        setAnonymousCpf(anonymousUser.cpf);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Verificar se o quiz foi iniciado antes de permitir jogar
+    if (quiz && quiz.status !== 'in_progress') {
+      Alert.alert(
+        'Quiz não iniciado',
+        'O quiz ainda não foi iniciado pelo organizador',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('WaitingForQuiz', { quizId }),
+          },
+        ]
+      );
+    }
+  }, [quiz]);
 
   useEffect(() => {
     if (quiz && quiz.questions && quiz.questions[currentQuestionIndex]) {
@@ -73,6 +103,22 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const handleSubmit = async () => {
+    // Quando o tempo acaba sem opção selecionada, pula para próxima pergunta
+    if (!selectedOption && timeLeft === 0) {
+      Alert.alert(
+        'Tempo Esgotado!',
+        'Você não respondeu a tempo. Próxima pergunta...',
+        [
+          {
+            text: 'OK',
+            onPress: handleNextQuestion,
+          },
+        ]
+      );
+      return;
+    }
+
+    // Se usuário clicar no botão sem selecionar opção
     if (!selectedOption) {
       Alert.alert('Aviso', 'Selecione uma opção');
       return;
@@ -83,18 +129,26 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
       const timeTaken = Date.now() - startTime;
       const question = quiz!.questions![currentQuestionIndex];
 
-      const response = await api.post(`/quizzes/${quizId}/answers`, {
+      // Build request body - include CPF if anonymous user
+      const requestBody: any = {
         question_id: question.id,
         option_id: selectedOption,
         time_taken_ms: timeTaken,
-      });
+      };
+
+      // Add CPF for anonymous users
+      if (!user && anonymousCpf) {
+        requestBody.cpf = anonymousCpf;
+      }
+
+      const response = await api.post(`/quizzes/${quizId}/answers`, requestBody);
 
       const result: AnswerResult = response.data.data;
       setScore(score + result.points_earned);
 
       Alert.alert(
-        result.is_correct ? 'Correto!' : 'Incorreto!',
-        `Você ganhou ${result.points_earned} pontos`,
+        result.is_correct ? '✓ Correto!' : '✗ Incorreto!',
+        `Você ganhou ${result.points_earned} pontos\n\nPontuação total: ${score + result.points_earned}`,
         [
           {
             text: 'Próxima',
@@ -103,7 +157,14 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
         ]
       );
     } catch (error: any) {
-      Alert.alert('Erro', error.response?.data?.message || 'Erro ao enviar resposta');
+      console.error('Error submitting answer:', error);
+      // Não mostrar erro se for problema de token/autenticação após salvar
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        // Pula para próxima mesmo com erro de autenticação
+        handleNextQuestion();
+      } else {
+        Alert.alert('Erro', error.response?.data?.message || 'Erro ao enviar resposta');
+      }
     } finally {
       setSubmitting(false);
     }

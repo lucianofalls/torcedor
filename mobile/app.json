@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Torcida Quiz",
-    "slug": "torcida-quiz",
+    "name": "MinhaTorcida",
+    "slug": "minha-torcida",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,26 +9,31 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#007AFF"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.torcida.quiz"
+      "bundleIdentifier": "com.minhatorcida.app",
+      "icon": "./assets/icon.png"
     },
     "android": {
+      "package": "com.minhatorcida.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.torcida.quiz"
+        "backgroundColor": "#007AFF"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [],
+    "plugins": [
+      "expo-asset"
+    ],
     "extra": {
-      "apiUrl": "http://localhost:3000"
+      "apiUrl": "http://192.168.0.111:3000"
     }
   }
 }
