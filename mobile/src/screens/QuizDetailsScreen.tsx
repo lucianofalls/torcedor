@@ -7,7 +7,9 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Share,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -145,6 +147,31 @@ const QuizDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     navigation.navigate('EditQuiz', { quizId });
   };
 
+  const handleCopyCode = async () => {
+    if (!quiz) return;
+    try {
+      await Clipboard.setStringAsync(quiz.code);
+      Alert.alert('Copiado!', `Código ${quiz.code} copiado para a área de transferência`);
+    } catch (error) {
+      Alert.alert('Erro', 'Não foi possível copiar o código');
+    }
+  };
+
+  const handleShareCode = async () => {
+    if (!quiz) return;
+    try {
+      const message = `Participe do Quiz "${quiz.title}"!\n\nUse o código: ${quiz.code}\n\nBaixe o app e entre com esse código para jogar!`;
+      await Share.share({
+        message,
+        title: `Quiz: ${quiz.title}`,
+      });
+    } catch (error: any) {
+      if (error.message !== 'User did not share') {
+        Alert.alert('Erro', 'Não foi possível compartilhar');
+      }
+    }
+  };
+
   const handleDeleteQuiz = () => {
     Alert.alert(
       'Confirmar Exclusão',
@@ -196,7 +223,17 @@ const QuizDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
       <View style={styles.infoCard}>
         <Text style={styles.infoLabel}>Código do Quiz</Text>
-        <Text style={styles.code}>{quiz.code}</Text>
+        <View style={styles.codeContainer}>
+          <Text style={styles.code}>{quiz.code}</Text>
+          <View style={styles.codeActions}>
+            <TouchableOpacity style={styles.codeActionButton} onPress={handleCopyCode}>
+              <Text style={styles.codeActionText}>Copiar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.shareButton} onPress={handleShareCode}>
+              <Text style={styles.codeActionText}>Compartilhar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <Text style={styles.infoLabel}>Status</Text>
         <Text style={styles.status}>{quiz.status}</Text>
@@ -208,7 +245,7 @@ const QuizDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Perguntas ({quiz.questions?.length || 0})</Text>
 
-        {(quiz.status === 'inactive' || quiz.status === 'active') && (
+        {(quiz.status === 'draft' || quiz.status === 'active') && (
           <TouchableOpacity
             style={styles.addQuestionButton}
             onPress={handleAddQuestion}
@@ -234,7 +271,7 @@ const QuizDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
       )}
 
-      {quiz.status === 'inactive' && (
+      {quiz.status === 'draft' && (
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity style={styles.editButton} onPress={handleEditQuiz}>
             <Text style={styles.buttonText}>✏️ Editar Quiz</Text>
@@ -246,7 +283,7 @@ const QuizDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
       )}
 
-      {quiz.status === 'inactive' && (
+      {quiz.status === 'draft' && (
         <TouchableOpacity style={styles.activateButton} onPress={handleActivateQuiz}>
           <Text style={styles.buttonText}>Ativar Quiz</Text>
         </TouchableOpacity>
@@ -327,6 +364,33 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#007AFF',
+  },
+  codeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  codeActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  codeActionButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  shareButton: {
+    backgroundColor: '#34C759',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  codeActionText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   status: {
     fontSize: 18,

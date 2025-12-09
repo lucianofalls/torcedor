@@ -44,6 +44,31 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
     }, [loadQuizzes])
   );
 
+  const handleStartQuiz = async (quizId: string) => {
+    Alert.alert(
+      'Iniciar Quiz',
+      'Tem certeza que deseja iniciar este quiz? Os participantes poderão começar a jogar.',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Iniciar',
+          onPress: async () => {
+            try {
+              await api.post(`/quizzes/${quizId}/start`);
+              Alert.alert('Sucesso', 'Quiz iniciado! Os participantes já podem jogar.');
+              loadQuizzes();
+            } catch (error: any) {
+              Alert.alert('Erro', error.response?.data?.message || 'Erro ao iniciar quiz');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleDeleteQuiz = (quizId: string, quizTitle: string) => {
     Alert.alert(
       'Confirmar Exclusão',
@@ -98,6 +123,13 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             onPress={() => navigation.navigate('EditQuiz', { quizId: item.id })}
           >
             <Text style={styles.actionButtonText}>✏️ Editar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.startQuizButton}
+            onPress={() => handleStartQuiz(item.id)}
+          >
+            <Text style={styles.actionButtonText}>▶️ Iniciar</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -236,17 +268,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
   },
+  startQuizButton: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
   deleteButton: {
     flex: 1,
     backgroundColor: '#FF3B30',
     paddingVertical: 10,
     borderRadius: 6,
     alignItems: 'center',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   quizTitle: {
     fontSize: 18,

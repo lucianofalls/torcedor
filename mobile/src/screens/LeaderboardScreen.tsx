@@ -52,11 +52,25 @@ const LeaderboardScreen: React.FC<Props> = ({ route }) => {
     }
   };
 
+  // Formatar CPF para exibição: XXX.XXX.XXX-XX
+  const formatCpf = (cpf: string | undefined) => {
+    if (!cpf) return '';
+    // Mostrar apenas os 3 primeiros e 2 últimos dígitos
+    const clean = cpf.replace(/\D/g, '');
+    if (clean.length === 11) {
+      return `${clean.substring(0, 3)}.***.***-${clean.substring(9)}`;
+    }
+    return cpf;
+  };
+
   const renderItem = ({ item }: { item: LeaderboardEntry }) => (
     <View style={styles.itemContainer}>
       <Text style={styles.position}>{renderMedal(item.position)}</Text>
       <View style={styles.itemInfo}>
-        <Text style={styles.userName}>{item.user_name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.userName}>{item.user_name}</Text>
+          {item.cpf && <Text style={styles.cpfText}>{formatCpf(item.cpf)}</Text>}
+        </View>
         <Text style={styles.stats}>
           {item.correct_answers}/{item.total_questions} corretas • {item.total_score}{' '}
           pontos
@@ -143,9 +157,23 @@ const styles = StyleSheet.create({
   itemInfo: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   userName: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  cpfText: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 8,
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   stats: {
     fontSize: 12,

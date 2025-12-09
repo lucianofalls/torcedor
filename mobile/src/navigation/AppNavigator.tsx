@@ -94,12 +94,12 @@ export const AppNavigator: React.FC = () => {
           />
           <Stack.Screen
             name="CreateQuiz"
-            component={CreateQuizScreen}
+            component={CreateQuizScreen as React.ComponentType<any>}
             options={{ title: 'Criar Quiz' }}
           />
           <Stack.Screen
             name="EditQuiz"
-            component={CreateQuizScreen}
+            component={CreateQuizScreen as React.ComponentType<any>}
             options={{ title: 'Editar Quiz' }}
           />
           <Stack.Screen

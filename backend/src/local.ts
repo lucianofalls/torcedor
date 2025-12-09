@@ -134,6 +134,13 @@ app.get('/quizzes/:id/status', async (req, res) => {
   res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
 });
 
+// Rota de progresso do participante no quiz
+app.get('/quizzes/:id/progress', async (req, res) => {
+  const event = createLambdaEvent(req);
+  const result = await quizHandlers.getProgress(event as any);
+  res.status(result.statusCode).set('Content-Type', 'application/json').send(result.body);
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`🌐 Network: http://192.168.0.121:${PORT}`);

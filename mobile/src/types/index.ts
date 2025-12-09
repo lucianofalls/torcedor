@@ -14,6 +14,7 @@ export interface Quiz {
   description?: string;
   code: string;
   max_participants: number;
+  time_limit: number;
   status: 'draft' | 'active' | 'in_progress' | 'finished';
   participant_count?: number;
   created_at: string;
@@ -40,6 +41,7 @@ export interface Option {
 export interface LeaderboardEntry {
   user_id: string;
   user_name: string;
+  cpf?: string;
   total_score: number;
   total_time_ms: number;
   position: number;

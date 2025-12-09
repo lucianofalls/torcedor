@@ -34,6 +34,8 @@ interface Quiz {
   participant_count: number;
   canPlay: boolean;
   statusMessage: string;
+  isCompleted: boolean;
+  timeExpired: boolean;
 }
 
 const MyQuizzesScreen: React.FC<Props> = ({ navigation }) => {
@@ -80,17 +82,37 @@ const MyQuizzesScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleQuizPress = (quiz: Quiz) => {
-    if (quiz.canPlay) {
-      // Quiz em andamento, pode jogar
+    if (quiz.isCompleted) {
+      // Participante já completou este quiz - mostrar apenas ranking
+      Alert.alert(
+        'Quiz Concluído',
+        'Você já respondeu todas as perguntas deste quiz. Deseja ver o ranking?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Ver Ranking', onPress: () => navigation.navigate('Leaderboard', { quizId: quiz.id }) },
+        ]
+      );
+    } else if (quiz.timeExpired) {
+      // Tempo do quiz expirou - mostrar apenas ranking
+      Alert.alert(
+        'Tempo Expirado',
+        'O tempo deste quiz já expirou. Você não pode mais participar, mas pode ver o ranking.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Ver Ranking', onPress: () => navigation.navigate('Leaderboard', { quizId: quiz.id }) },
+        ]
+      );
+    } else if (quiz.canPlay) {
+      // Quiz em andamento e participante ainda não completou, pode jogar
       navigation.navigate('PlayQuiz', { quizId: quiz.id });
     } else if (quiz.status === 'active' && !quiz.started_at) {
       // Quiz aguardando início
       navigation.navigate('WaitingForQuiz', { quizId: quiz.id });
     } else if (quiz.status === 'finished') {
-      // Quiz finalizado, mostrar ranking
+      // Quiz finalizado pelo criador, mostrar ranking
       Alert.alert(
         'Quiz Finalizado',
-        'Este quiz já foi concluído. Deseja ver o ranking?',
+        'Este quiz foi encerrado pelo organizador. Deseja ver o ranking?',
         [
           { text: 'Cancelar', style: 'cancel' },
           { text: 'Ver Ranking', onPress: () => navigation.navigate('Leaderboard', { quizId: quiz.id }) },
@@ -106,6 +128,8 @@ const MyQuizzesScreen: React.FC<Props> = ({ navigation }) => {
   const getStatusColor = (statusMessage: string) => {
     if (statusMessage === 'Em andamento') return '#34C759';
     if (statusMessage === 'Aguardando início') return '#FF9500';
+    if (statusMessage === 'Concluído') return '#007AFF';
+    if (statusMessage === 'Tempo expirado') return '#FF3B30';
     if (statusMessage === 'Finalizado') return '#999';
     return '#666';
   };
@@ -113,6 +137,8 @@ const MyQuizzesScreen: React.FC<Props> = ({ navigation }) => {
   const getStatusIcon = (statusMessage: string) => {
     if (statusMessage === 'Em andamento') return '🎮';
     if (statusMessage === 'Aguardando início') return '⏳';
+    if (statusMessage === 'Concluído') return '🏆';
+    if (statusMessage === 'Tempo expirado') return '⏰';
     if (statusMessage === 'Finalizado') return '✅';
     return '❓';
   };
@@ -192,19 +218,31 @@ const MyQuizzesScreen: React.FC<Props> = ({ navigation }) => {
                 </Text>
               </View>
 
-              {quiz.canPlay && (
+              {quiz.canPlay && !quiz.isCompleted && !quiz.timeExpired && (
                 <View style={styles.playButton}>
                   <Text style={styles.playButtonText}>▶ Jogar Agora</Text>
                 </View>
               )}
 
-              {quiz.status === 'active' && !quiz.started_at && (
+              {quiz.status === 'active' && !quiz.started_at && !quiz.isCompleted && !quiz.timeExpired && (
                 <View style={styles.waitingButton}>
                   <Text style={styles.waitingButtonText}>⏳ Aguardando</Text>
                 </View>
               )}
 
-              {quiz.status === 'finished' && (
+              {quiz.isCompleted && (
+                <View style={styles.completedButton}>
+                  <Text style={styles.completedButtonText}>🏆 Você já jogou - Ver Ranking</Text>
+                </View>
+              )}
+
+              {quiz.timeExpired && !quiz.isCompleted && (
+                <View style={styles.expiredButton}>
+                  <Text style={styles.expiredButtonText}>⏰ Tempo Expirado - Ver Ranking</Text>
+                </View>
+              )}
+
+              {quiz.status === 'finished' && !quiz.isCompleted && !quiz.timeExpired && (
                 <View style={styles.finishedButton}>
                   <Text style={styles.finishedButtonText}>📊 Ver Ranking</Text>
                 </View>
@@ -371,6 +409,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   finishedButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  completedButton: {
+    backgroundColor: '#007AFF',
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  completedButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  expiredButton: {
+    backgroundColor: '#FF3B30',
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  expiredButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',

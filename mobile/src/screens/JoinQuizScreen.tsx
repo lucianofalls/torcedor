@@ -108,12 +108,54 @@ const JoinQuizScreen: React.FC<Props> = ({ navigation }) => {
       const quizId = response.data.data.quiz.id;
       const quizStatus = response.data.data.quiz.status;
       const quizStartedAt = response.data.data.quiz.started_at;
+      const canContinue = response.data.data.canContinue;
+      const timeExpired = response.data.data.timeExpired;
 
       // Salvar dados do usuário anônimo
       await saveAnonymousUser(cleanedCpf, trimmedName);
 
       // Salvar o quiz na lista de participados
       await addParticipatedQuiz(quizId, code.toUpperCase());
+
+      // Verificar se o tempo do quiz expirou
+      if (timeExpired) {
+        Alert.alert(
+          'Tempo Expirado',
+          'O tempo deste quiz já expirou. Você não pode mais participar, mas pode ver o ranking.',
+          [
+            {
+              text: 'Ver Ranking',
+              onPress: () => navigation.navigate('Leaderboard', { quizId }),
+            },
+          ]
+        );
+        return;
+      }
+
+      // Verificar se é continuação de quiz já participado
+      if (canContinue) {
+        // Usuário já está participando, pode continuar
+        if (quizStatus === 'in_progress' && quizStartedAt) {
+          Alert.alert('Bem-vindo de volta!', 'Você já está participando deste quiz. Continue jogando!', [
+            {
+              text: 'Continuar',
+              onPress: () => navigation.navigate('PlayQuiz', { quizId }),
+            },
+          ]);
+        } else {
+          Alert.alert(
+            'Quiz não iniciado',
+            'Você já está participando deste quiz. Aguarde o organizador iniciar.',
+            [
+              {
+                text: 'OK',
+                onPress: () => navigation.navigate('WaitingForQuiz', { quizId }),
+              },
+            ]
+          );
+        }
+        return;
+      }
 
       // Verificar se o quiz já foi iniciado
       if (quizStatus === 'in_progress' && quizStartedAt) {
@@ -138,7 +180,27 @@ const JoinQuizScreen: React.FC<Props> = ({ navigation }) => {
         );
       }
     } catch (error: any) {
-      Alert.alert('Erro', error.response?.data?.message || 'Erro ao entrar no quiz');
+      const errorMessage = error.response?.data?.message || 'Erro ao entrar no quiz';
+
+      // Verificar se é erro de quiz já completado
+      if (errorMessage.includes('já participou e completou')) {
+        Alert.alert(
+          'Quiz já concluído',
+          'Você já participou e completou este quiz. Não é possível jogar novamente.',
+          [
+            {
+              text: 'Ver Meus Quizzes',
+              onPress: () => navigation.navigate('MyQuizzes'),
+            },
+            {
+              text: 'OK',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Erro', errorMessage);
+      }
     } finally {
       setLoading(false);
     }

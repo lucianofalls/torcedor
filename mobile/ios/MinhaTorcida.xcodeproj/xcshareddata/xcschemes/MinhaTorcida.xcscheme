@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "TorcidaQuiz.app"
-               BlueprintName = "TorcidaQuiz"
-               ReferencedContainer = "container:TorcidaQuiz.xcodeproj">
+               BuildableName = "MinhaTorcida.app"
+               BlueprintName = "MinhaTorcida"
+               ReferencedContainer = "container:MinhaTorcida.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "TorcidaQuizTests.xctest"
-               BlueprintName = "TorcidaQuizTests"
-               ReferencedContainer = "container:TorcidaQuiz.xcodeproj">
+               BuildableName = "MinhaTorcidaTests.xctest"
+               BlueprintName = "MinhaTorcidaTests"
+               ReferencedContainer = "container:MinhaTorcida.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "TorcidaQuiz.app"
-            BlueprintName = "TorcidaQuiz"
-            ReferencedContainer = "container:TorcidaQuiz.xcodeproj">
+            BuildableName = "MinhaTorcida.app"
+            BlueprintName = "MinhaTorcida"
+            ReferencedContainer = "container:MinhaTorcida.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "TorcidaQuiz.app"
-            BlueprintName = "TorcidaQuiz"
-            ReferencedContainer = "container:TorcidaQuiz.xcodeproj">
+            BuildableName = "MinhaTorcida.app"
+            BlueprintName = "MinhaTorcida"
+            ReferencedContainer = "container:MinhaTorcida.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

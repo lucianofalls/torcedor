@@ -51,6 +51,11 @@ export const submit = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
     const participant = participantResult.rows[0];
 
+    // Verificar se o participante já completou o quiz
+    if (participant.completed_at) {
+      return errorResponse('Você já completou este quiz', 403);
+    }
+
     // Verificar se a resposta já foi enviada
     const existingAnswer = await query(
       'SELECT id FROM participant_answers WHERE participant_id = $1 AND question_id = $2',
@@ -102,10 +107,34 @@ export const submit = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
       [finalPoints, time_taken_ms, participant.id]
     );
 
+    // Verificar se o participante respondeu todas as perguntas do quiz
+    const totalQuestionsResult = await query(
+      'SELECT COUNT(*) as total FROM questions WHERE quiz_id = $1',
+      [quizId]
+    );
+    const totalQuestions = parseInt(totalQuestionsResult.rows[0].total);
+
+    const answeredQuestionsResult = await query(
+      'SELECT COUNT(*) as answered FROM participant_answers WHERE participant_id = $1',
+      [participant.id]
+    );
+    const answeredQuestions = parseInt(answeredQuestionsResult.rows[0].answered);
+
+    // Se respondeu todas as perguntas, marcar como completado
+    let quizCompleted = false;
+    if (answeredQuestions >= totalQuestions) {
+      await query(
+        'UPDATE quiz_participants SET completed_at = NOW() WHERE id = $1',
+        [participant.id]
+      );
+      quizCompleted = true;
+    }
+
     return successResponse({
       is_correct: isCorrect,
       points_earned: finalPoints,
       time_taken_ms,
+      quiz_completed: quizCompleted,
     });
   } catch (error) {
     console.error('Submit answer error:', error);

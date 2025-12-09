@@ -12,10 +12,12 @@ export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     }
 
     // Buscar ranking - suporta tanto usuários autenticados quanto anônimos
+    // Agora retorna o CPF para identificação única
     const result = await query(
       `SELECT
          COALESCE(qp.user_id::text, qp.cpf) as user_id,
          COALESCE(u.name, qp.participant_name) as user_name,
+         qp.cpf,
          qp.total_score,
          qp.total_time_ms,
          COUNT(pa.id) FILTER (WHERE pa.is_correct = true) as correct_answers,

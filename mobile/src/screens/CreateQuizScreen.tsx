@@ -45,6 +45,7 @@ const CreateQuizScreen: React.FC<Props> = ({ navigation, route }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [maxParticipants, setMaxParticipants] = useState('50');
+  const [timeLimit, setTimeLimit] = useState('30'); // Tempo limite por pergunta (em segundos)
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -66,6 +67,7 @@ const CreateQuizScreen: React.FC<Props> = ({ navigation, route }) => {
       setTitle(quiz.title);
       setDescription(quiz.description || '');
       setMaxParticipants(quiz.max_participants?.toString() || '50');
+      setTimeLimit(quiz.time_limit?.toString() || '30');
 
       if (quiz.questions && quiz.questions.length > 0) {
         const formattedQuestions = quiz.questions.map((q: any) => ({
@@ -239,6 +241,7 @@ const CreateQuizScreen: React.FC<Props> = ({ navigation, route }) => {
           title,
           description,
           max_participants: parseInt(maxParticipants),
+          time_limit: parseInt(timeLimit),
         });
         console.log('✅ [CreateQuiz] Dados básicos atualizados! Response:', putResponse.status);
 
@@ -309,6 +312,7 @@ const CreateQuizScreen: React.FC<Props> = ({ navigation, route }) => {
           title,
           description,
           max_participants: parseInt(maxParticipants),
+          time_limit: parseInt(timeLimit),
         });
 
         const newQuizId = quizResponse.data.data.id;
@@ -392,6 +396,16 @@ const CreateQuizScreen: React.FC<Props> = ({ navigation, route }) => {
           keyboardType="number-pad"
         />
 
+        <Text style={styles.label}>Tempo por Pergunta (segundos)</Text>
+        <TextInput
+          style={styles.input}
+          value={timeLimit}
+          onChangeText={setTimeLimit}
+          placeholder="30"
+          keyboardType="number-pad"
+        />
+        <Text style={styles.hint}>Tempo que cada participante terá para responder cada pergunta</Text>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Perguntas ({questions.length})</Text>
           <TouchableOpacity style={styles.addButton} onPress={addQuestion}>
@@ -435,16 +449,6 @@ const CreateQuizScreen: React.FC<Props> = ({ navigation, route }) => {
                       onChangeText={(text) => updateQuestion(qIndex, 'question_text', text)}
                       placeholder="Digite a pergunta"
                     />
-
-                    <Text style={styles.label}>Tempo Limite</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={question.time_limit}
-                      onChangeText={(text) => updateQuestion(qIndex, 'time_limit', text)}
-                      placeholder="Tempo em segundos"
-                      keyboardType="number-pad"
-                    />
-                    <Text style={styles.hint}>Tempo em segundos para responder</Text>
 
                     <Text style={styles.optionsLabel}>Opções:</Text>
                     {question.options.map((option, oIndex) => (
