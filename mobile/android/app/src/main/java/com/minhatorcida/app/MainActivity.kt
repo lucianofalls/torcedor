@@ -1,4 +1,4 @@
-package com.torcida.quiz
+package com.minhatorcida.app
 
 import android.os.Build
 import android.os.Bundle

@@ -1,5 +1,61 @@
 # CHANGELOG - Torcida Quiz Mobile App
 
+---
+
+## ⚠️ IMPORTANTE: Checklist de Versionamento para Deploy
+
+**Antes de cada deploy no TestFlight/App Store, SEMPRE incrementar:**
+
+| Arquivo | Campo | Descrição |
+|---------|-------|-----------|
+| `app.json` | `version` | Versão semântica (ex: 1.0.1 → 1.0.2) |
+| `app.json` | `ios.buildNumber` | Build number iOS (ex: 2 → 3) |
+| `app.json` | `android.versionCode` | Version code Android (ex: 2 → 3) |
+| `ios/MinhaTorcida/Info.plist` | `CFBundleShortVersionString` | Mesma versão do app.json |
+| `ios/MinhaTorcida/Info.plist` | `CFBundleVersion` | Mesmo buildNumber do app.json |
+
+**Comandos para deploy:**
+```bash
+cd mobile
+npx eas build --platform ios --profile production --non-interactive
+npx eas submit --platform ios --latest
+```
+
+---
+
+## [2025-12-11] - v1.0.1 - Fix de Network e CORS
+
+### 🔧 Correções
+
+#### Timeout de API aumentado
+**Arquivo:** `src/config/api.ts`
+**Problema:** App no TestFlight dava erro de network por timeout em cold start do Lambda
+**Solução:** Timeout aumentado de 10s para 30s
+
+```typescript
+timeout: 30000, // era 10000
+```
+
+#### CORS melhorado no backend
+**Arquivo:** `backend/src/utils/response.ts`
+**Problema:** Headers CORS incompletos podiam causar problemas em alguns devices
+**Solução:** Headers CORS completos adicionados
+
+```typescript
+const corsHeaders = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Max-Age': '86400',
+};
+```
+
+**Status:** ✅ Backend deployed na AWS
+
+---
+
 ## [2025-11-24] - Atualização Major: SDK 52 e Correções de UX
 
 ### 🎯 Contexto
@@ -265,6 +321,6 @@ npx expo run:ios --device "iPhone 17 Pro"
 
 ---
 
-**Última atualização:** 2025-11-24
+**Última atualização:** 2025-12-11
 **Status geral:** ✅ Estável e funcional
-**Versão do app:** 1.0.0
+**Versão do app:** 1.0.1

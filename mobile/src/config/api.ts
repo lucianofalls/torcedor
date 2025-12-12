@@ -1,13 +1,12 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Para simulador iOS e dispositivo físico: usar IP da máquina na rede
-// localhost NÃO funciona no simulador iOS (aponta para o próprio simulador)
-const API_URL = 'http://192.168.0.111:3000';
+// API AWS Lambda - Produção
+const API_URL = 'https://wtm7jm5p62.execute-api.us-east-1.amazonaws.com/prod';
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: 30000, // Aumentado para suportar cold start do Lambda
   headers: {
     'Content-Type': 'application/json',
   },

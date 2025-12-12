@@ -21,8 +21,8 @@ interface Props {
 
 const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('admin@torcida.com');
-  const [password, setPassword] = useState('Instagram2023');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [hasAnonymousUser, setHasAnonymousUser] = useState(false);
 

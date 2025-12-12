@@ -21,7 +21,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   }
 }
 
-rootProject.name = 'Torcida Quiz'
+rootProject.name = 'MinhaTorcida'
 
 dependencyResolutionManagement {
   versionCatalogs {

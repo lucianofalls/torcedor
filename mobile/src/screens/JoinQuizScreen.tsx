@@ -101,7 +101,7 @@ const JoinQuizScreen: React.FC<Props> = ({ navigation }) => {
       const cleanedCpf = cpf.replace(/\D/g, '');
       const trimmedName = name.trim();
 
-      const response = await api.post(`/quizzes/${code.toUpperCase()}/join`, {
+      const response = await api.post(`/quizzes/join/${code.toUpperCase()}`, {
         cpf: cleanedCpf,
         participant_name: trimmedName,
       });
