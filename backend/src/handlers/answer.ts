@@ -93,7 +93,7 @@ export const submit = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
     // Inserir resposta
     await query(
-      `INSERT INTO participant_answers (participant_id, question_id, option_id, time_taken_ms, is_correct, points_earned)
+      `INSERT INTO participant_answers (participant_id, question_id, option_id, time_taken, is_correct, points_earned)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [participant.id, question_id, option_id, time_taken_ms, isCorrect, finalPoints]
     );
@@ -101,10 +101,9 @@ export const submit = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
     // Atualizar pontuação total do participante
     await query(
       `UPDATE quiz_participants
-       SET total_score = total_score + $1,
-           total_time_ms = total_time_ms + $2
-       WHERE id = $3`,
-      [finalPoints, time_taken_ms, participant.id]
+       SET total_score = total_score + $1
+       WHERE id = $2`,
+      [finalPoints, participant.id]
     );
 
     // Verificar se o participante respondeu todas as perguntas do quiz

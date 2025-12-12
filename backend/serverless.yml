@@ -6,26 +6,25 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: us-east-1
-  stage: ${opt:stage, 'dev'}
-  memorySize: 512
+  stage: ${opt:stage, 'prod'}
+  memorySize: 256
   timeout: 30
   environment:
     STAGE: ${self:provider.stage}
-    DB_HOST: ${env:DB_HOST}
-    DB_PORT: ${env:DB_PORT, '5432'}
-    DB_NAME: ${env:DB_NAME}
-    DB_USER: ${env:DB_USER}
-    DB_PASSWORD: ${env:DB_PASSWORD}
-    JWT_SECRET: ${env:JWT_SECRET}
+    DB_HOST: minhatorcida-db-prod.cwn39ruk7uza.us-east-1.rds.amazonaws.com
+    DB_PORT: '5432'
+    DB_NAME: torcida_db
+    DB_USER: torcida_user
+    DB_PASSWORD: torcida_pass_2024
+    JWT_SECRET: minhatorcida-jwt-secret-prod-2024
   iam:
-    role:
-      statements:
-        - Effect: Allow
-          Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-          Resource: '*'
+    role: arn:aws:iam::442133546524:role/minhatorcida-lambda-role-prod
+  vpc:
+    securityGroupIds:
+      - sg-0ea73082a8e6a1ccf
+    subnetIds:
+      - subnet-086c624f9f43be84d
+      - subnet-0f9c9c6f140a7c02f
 
 plugins:
   - serverless-plugin-typescript
@@ -70,7 +69,7 @@ functions:
     handler: src/handlers/quiz.get
     events:
       - http:
-          path: /quizzes/{id}
+          path: /quizzes/{quizId}
           method: get
           cors: true
 
@@ -78,7 +77,7 @@ functions:
     handler: src/handlers/quiz.join
     events:
       - http:
-          path: /quizzes/{code}/join
+          path: /quizzes/join/{code}
           method: post
           cors: true
 
@@ -86,8 +85,64 @@ functions:
     handler: src/handlers/quiz.start
     events:
       - http:
-          path: /quizzes/{id}/start
+          path: /quizzes/{quizId}/start
           method: post
+          cors: true
+
+  updateQuiz:
+    handler: src/handlers/quiz.update
+    events:
+      - http:
+          path: /quizzes/{quizId}
+          method: put
+          cors: true
+
+  deleteQuiz:
+    handler: src/handlers/quiz.remove
+    events:
+      - http:
+          path: /quizzes/{quizId}
+          method: delete
+          cors: true
+
+  activateQuiz:
+    handler: src/handlers/quiz.activate
+    events:
+      - http:
+          path: /quizzes/{quizId}/activate
+          method: post
+          cors: true
+
+  finishQuiz:
+    handler: src/handlers/quiz.finish
+    events:
+      - http:
+          path: /quizzes/{quizId}/finish
+          method: post
+          cors: true
+
+  getQuizStatus:
+    handler: src/handlers/quiz.getQuizStatus
+    events:
+      - http:
+          path: /quizzes/{quizId}/status
+          method: get
+          cors: true
+
+  getQuizProgress:
+    handler: src/handlers/quiz.getProgress
+    events:
+      - http:
+          path: /quizzes/{quizId}/progress
+          method: get
+          cors: true
+
+  getParticipantQuizzes:
+    handler: src/handlers/quiz.getParticipantQuizzes
+    events:
+      - http:
+          path: /participants/{cpf}/quizzes
+          method: get
           cors: true
 
   # Questions
@@ -97,6 +152,14 @@ functions:
       - http:
           path: /quizzes/{quizId}/questions
           method: post
+          cors: true
+
+  removeQuestion:
+    handler: src/handlers/question.remove
+    events:
+      - http:
+          path: /quizzes/{quizId}/questions/{questionId}
+          method: delete
           cors: true
 
   # Answers

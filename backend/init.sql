@@ -32,7 +32,8 @@ CREATE TABLE quizzes (
     description TEXT,
     code VARCHAR(10) UNIQUE NOT NULL,
     max_participants INTEGER DEFAULT 50,
-    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'in_progress', 'finished')),
+    time_limit INTEGER DEFAULT 30,
+    status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'in_progress', 'finished')),
     started_at TIMESTAMP,
     finished_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -65,9 +66,12 @@ CREATE TABLE quiz_participants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     quiz_id UUID REFERENCES quizzes(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    cpf VARCHAR(11),
+    participant_name VARCHAR(255),
     score INTEGER DEFAULT 0,
+    total_score INTEGER DEFAULT 0,
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(quiz_id, user_id)
+    completed_at TIMESTAMP
 );
 
 -- Create answers table
@@ -93,6 +97,19 @@ CREATE TABLE sync_sessions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create participant_answers table (for anonymous participants)
+CREATE TABLE participant_answers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    participant_id UUID REFERENCES quiz_participants(id) ON DELETE CASCADE,
+    question_id UUID REFERENCES questions(id) ON DELETE CASCADE,
+    option_id UUID REFERENCES options(id) ON DELETE CASCADE,
+    is_correct BOOLEAN DEFAULT FALSE,
+    time_taken INTEGER,
+    points_earned INTEGER DEFAULT 0,
+    answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(participant_id, question_id)
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_quizzes_creator ON quizzes(creator_id);
 CREATE INDEX idx_quizzes_code ON quizzes(code);
@@ -100,8 +117,11 @@ CREATE INDEX idx_questions_quiz ON questions(quiz_id);
 CREATE INDEX idx_options_question ON options(question_id);
 CREATE INDEX idx_participants_quiz ON quiz_participants(quiz_id);
 CREATE INDEX idx_participants_user ON quiz_participants(user_id);
+CREATE INDEX idx_participants_cpf ON quiz_participants(cpf);
 CREATE INDEX idx_answers_participant ON answers(participant_id);
 CREATE INDEX idx_answers_question ON answers(question_id);
+CREATE INDEX idx_participant_answers_participant ON participant_answers(participant_id);
+CREATE INDEX idx_participant_answers_question ON participant_answers(question_id);
 
 -- Database initialization complete
 -- Use the /auth/register endpoint to create users

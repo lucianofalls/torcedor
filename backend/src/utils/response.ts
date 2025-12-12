@@ -4,14 +4,19 @@ export interface ApiResponse {
   body: string;
 }
 
+const corsHeaders = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Max-Age': '86400',
+};
+
 export const successResponse = (data: any, statusCode = 200): ApiResponse => {
   return {
     statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': 'true',
-    },
+    headers: corsHeaders,
     body: JSON.stringify({
       success: true,
       data,
@@ -24,11 +29,7 @@ export const errorResponse = (message: string, statusCode = 400, error?: any): A
 
   return {
     statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': 'true',
-    },
+    headers: corsHeaders,
     body: JSON.stringify({
       success: false,
       message,

@@ -69,7 +69,7 @@ export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
       verifyToken(token); // Validate token if provided
     }
 
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
 
     if (!quizId) {
       return errorResponse('ID do quiz não fornecido', 400);
@@ -172,34 +172,8 @@ export const join = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 
     const quiz = quizResult.rows[0];
 
-    // Se o quiz está em progresso, verificar se o tempo total já expirou
-    if (quiz.status === 'in_progress' && quiz.started_at) {
-      // Calcular tempo total: time_limit do quiz * número de perguntas
-      const questionCountResult = await query(
-        'SELECT COUNT(*) as question_count FROM questions WHERE quiz_id = $1',
-        [quiz.id]
-      );
-      const questionCount = parseInt(questionCountResult.rows[0].question_count) || 0;
-      const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
-
-      // Calcular se o tempo expirou
-      const startedAt = new Date(quiz.started_at);
-      const now = new Date();
-      const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-
-      // Adicionar margem de 30 segundos para transições entre perguntas
-      const totalTimeWithMargin = totalTimeSeconds + 30;
-
-      if (elapsedSeconds > totalTimeWithMargin) {
-        // Tempo expirado - retornar info para redirecionar ao ranking
-        return successResponse({
-          message: 'O tempo deste quiz já expirou',
-          quiz,
-          timeExpired: true,
-          canContinue: false,
-        });
-      }
-    }
+    // Nota: NÃO verificamos expiração global aqui para novos participantes
+    // A expiração é calculada individualmente com base no tempo da primeira resposta de cada participante
 
     // Verificar número de participantes
     const participantCount = await query(
@@ -229,23 +203,34 @@ export const join = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxy
           return errorResponse('Você já participou e completou este quiz', 400);
         }
 
-        // Verificar se o tempo expirou para participantes já cadastrados
+        // Verificar se o tempo expirou para este participante específico
+        // Baseado na primeira resposta do participante (não no início global do quiz)
         let timeExpired = false;
-        if (quiz.status === 'in_progress' && quiz.started_at) {
-          const questionCountResult = await query(
-            'SELECT COUNT(*) as question_count FROM questions WHERE quiz_id = $1',
-            [quiz.id]
+        if (quiz.status === 'in_progress') {
+          // Buscar a primeira resposta deste participante
+          const firstAnswerResult = await query(
+            'SELECT answered_at FROM participant_answers WHERE participant_id = $1 ORDER BY answered_at ASC LIMIT 1',
+            [participant.id]
           );
-          const questionCount = parseInt(questionCountResult.rows[0].question_count) || 0;
-          const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
-          const startedAt = new Date(quiz.started_at);
-          const now = new Date();
-          const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-          const totalTimeWithMargin = totalTimeSeconds + 30;
 
-          if (elapsedSeconds > totalTimeWithMargin) {
-            timeExpired = true;
+          // Se o participante já começou a responder, verificar se o tempo dele expirou
+          if (firstAnswerResult.rows.length > 0) {
+            const questionCountResult = await query(
+              'SELECT COUNT(*) as question_count FROM questions WHERE quiz_id = $1',
+              [quiz.id]
+            );
+            const questionCount = parseInt(questionCountResult.rows[0].question_count) || 0;
+            const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
+            const participantStartedAt = new Date(firstAnswerResult.rows[0].answered_at);
+            const now = new Date();
+            const elapsedSeconds = Math.floor((now.getTime() - participantStartedAt.getTime()) / 1000);
+            const totalTimeWithMargin = totalTimeSeconds + 30;
+
+            if (elapsedSeconds > totalTimeWithMargin) {
+              timeExpired = true;
+            }
           }
+          // Se não tem respostas ainda, o participante ainda não começou → não está expirado
         }
 
         // Já está participando mas não completou - pode continuar jogando se tempo não expirou
@@ -271,23 +256,34 @@ export const join = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxy
           return errorResponse('Você já participou e completou este quiz', 400);
         }
 
-        // Verificar se o tempo expirou para participantes já cadastrados
+        // Verificar se o tempo expirou para este participante específico
+        // Baseado na primeira resposta do participante (não no início global do quiz)
         let timeExpired = false;
-        if (quiz.status === 'in_progress' && quiz.started_at) {
-          const questionCountResult = await query(
-            'SELECT COUNT(*) as question_count FROM questions WHERE quiz_id = $1',
-            [quiz.id]
+        if (quiz.status === 'in_progress') {
+          // Buscar a primeira resposta deste participante
+          const firstAnswerResult = await query(
+            'SELECT answered_at FROM participant_answers WHERE participant_id = $1 ORDER BY answered_at ASC LIMIT 1',
+            [participant.id]
           );
-          const questionCount = parseInt(questionCountResult.rows[0].question_count) || 0;
-          const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
-          const startedAt = new Date(quiz.started_at);
-          const now = new Date();
-          const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-          const totalTimeWithMargin = totalTimeSeconds + 30;
 
-          if (elapsedSeconds > totalTimeWithMargin) {
-            timeExpired = true;
+          // Se o participante já começou a responder, verificar se o tempo dele expirou
+          if (firstAnswerResult.rows.length > 0) {
+            const questionCountResult = await query(
+              'SELECT COUNT(*) as question_count FROM questions WHERE quiz_id = $1',
+              [quiz.id]
+            );
+            const questionCount = parseInt(questionCountResult.rows[0].question_count) || 0;
+            const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
+            const participantStartedAt = new Date(firstAnswerResult.rows[0].answered_at);
+            const now = new Date();
+            const elapsedSeconds = Math.floor((now.getTime() - participantStartedAt.getTime()) / 1000);
+            const totalTimeWithMargin = totalTimeSeconds + 30;
+
+            if (elapsedSeconds > totalTimeWithMargin) {
+              timeExpired = true;
+            }
           }
+          // Se não tem respostas ainda, o participante ainda não começou → não está expirado
         }
 
         // Já está participando mas não completou - pode continuar jogando se tempo não expirou
@@ -340,7 +336,7 @@ export const start = async (event: APIGatewayProxyEvent): Promise<APIGatewayProx
     }
 
     const payload = verifyToken(token);
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
 
     if (!quizId) {
       return errorResponse('ID do quiz não fornecido', 400);
@@ -397,7 +393,7 @@ export const update = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
     }
 
     const payload = verifyToken(token);
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
 
     if (!quizId) {
       return errorResponse('ID do quiz não fornecido', 400);
@@ -450,7 +446,7 @@ export const remove = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
     }
 
     const payload = verifyToken(token);
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
 
     if (!quizId) {
       return errorResponse('ID do quiz não fornecido', 400);
@@ -499,6 +495,8 @@ export const getParticipantQuizzes = async (event: APIGatewayProxyEvent): Promis
     }
 
     // Buscar todos os quizzes que este CPF participou, incluindo completed_at, tempo do quiz e perguntas respondidas
+    // Também buscar a primeira resposta do participante para calcular expiração individual
+    // Usando LEFT JOINs com subqueries agregadas para compatibilidade com PostgreSQL
     const result = await query(
       `SELECT
         q.id,
@@ -511,11 +509,15 @@ export const getParticipantQuizzes = async (event: APIGatewayProxyEvent): Promis
         q.time_limit,
         qp.completed_at,
         qp.id as participant_id,
-        (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) as question_count,
-        (SELECT COUNT(*) FROM quiz_participants WHERE quiz_id = q.id) as participant_count,
-        (SELECT COUNT(*) FROM participant_answers WHERE participant_id = qp.id) as answered_questions
+        COALESCE(qc.question_count, 0) as question_count,
+        COALESCE(pc.participant_count, 0) as participant_count,
+        COALESCE(ac.answered_questions, 0) as answered_questions,
+        ac.first_answer_at
        FROM quizzes q
        JOIN quiz_participants qp ON q.id = qp.quiz_id
+       LEFT JOIN (SELECT quiz_id, COUNT(*) as question_count FROM questions GROUP BY quiz_id) qc ON q.id = qc.quiz_id
+       LEFT JOIN (SELECT quiz_id, COUNT(*) as participant_count FROM quiz_participants GROUP BY quiz_id) pc ON q.id = pc.quiz_id
+       LEFT JOIN (SELECT participant_id, COUNT(*) as answered_questions, MIN(answered_at) as first_answer_at FROM participant_answers GROUP BY participant_id) ac ON qp.id = ac.participant_id
        WHERE qp.cpf = $1
        ORDER BY q.created_at DESC`,
       [cleanedCPF]
@@ -528,19 +530,23 @@ export const getParticipantQuizzes = async (event: APIGatewayProxyEvent): Promis
       const isCompleted = !!quiz.completed_at;
       let timeExpired = false;
 
-      // Verificar se o tempo do quiz expirou (para quizzes em andamento)
-      if (quiz.status === 'in_progress' && quiz.started_at && !isCompleted) {
-        const questionCount = parseInt(quiz.question_count) || 0;
-        const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
-        const startedAt = new Date(quiz.started_at);
-        const now = new Date();
-        const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-        // Margem de 30 segundos para transições entre perguntas
-        const totalTimeWithMargin = totalTimeSeconds + 30;
+      // Verificar se o tempo do quiz expirou PARA ESTE PARTICIPANTE (baseado na primeira resposta dele)
+      if (quiz.status === 'in_progress' && !isCompleted) {
+        // Só verifica expiração se o participante já começou a responder
+        if (quiz.first_answer_at) {
+          const questionCount = parseInt(quiz.question_count) || 0;
+          const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
+          const participantStartedAt = new Date(quiz.first_answer_at);
+          const now = new Date();
+          const elapsedSeconds = Math.floor((now.getTime() - participantStartedAt.getTime()) / 1000);
+          // Margem de 30 segundos para transições entre perguntas
+          const totalTimeWithMargin = totalTimeSeconds + 30;
 
-        if (elapsedSeconds > totalTimeWithMargin) {
-          timeExpired = true;
+          if (elapsedSeconds > totalTimeWithMargin) {
+            timeExpired = true;
+          }
         }
+        // Se não tem first_answer_at, o participante ainda não começou → não está expirado
       }
 
       if (isCompleted) {
@@ -581,7 +587,7 @@ export const getParticipantQuizzes = async (event: APIGatewayProxyEvent): Promis
 
 export const getQuizStatus = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
 
     if (!quizId) {
       return errorResponse('ID do quiz não fornecido', 400);
@@ -628,7 +634,7 @@ export const activate = async (event: APIGatewayProxyEvent): Promise<APIGatewayP
     }
 
     const payload = verifyToken(token);
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
 
     if (!quizId) {
       return errorResponse('ID do quiz não fornecido', 400);
@@ -674,7 +680,7 @@ export const finish = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
     }
 
     const payload = verifyToken(token);
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
 
     if (!quizId) {
       return errorResponse('ID do quiz não fornecido', 400);
@@ -708,7 +714,7 @@ export const finish = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
 export const getProgress = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const quizId = event.pathParameters?.id;
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
     const cpf = event.queryStringParameters?.cpf;
 
     if (!quizId) {
@@ -746,27 +752,6 @@ export const getProgress = async (event: APIGatewayProxyEvent): Promise<APIGatew
 
     const quiz = quizResult.rows[0];
 
-    // Verificar se o tempo total do quiz expirou
-    let timeExpired = false;
-    if (quiz.status === 'in_progress' && quiz.started_at) {
-      const questionCount = parseInt(quiz.question_count) || 0;
-      const totalTimeSeconds = (quiz.time_limit || 30) * questionCount;
-      const startedAt = new Date(quiz.started_at);
-      const now = new Date();
-      const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-      // Margem de 30 segundos para transições entre perguntas
-      const totalTimeWithMargin = totalTimeSeconds + 30;
-
-      if (elapsedSeconds > totalTimeWithMargin) {
-        timeExpired = true;
-      }
-    }
-
-    // Se o tempo expirou, retornar erro
-    if (timeExpired) {
-      return errorResponse('O tempo do quiz expirou', 410, { timeExpired: true });
-    }
-
     // Verificar se o quiz está em andamento
     if (quiz.status !== 'in_progress') {
       return errorResponse('Quiz não está em andamento', 400, { status: quiz.status });
@@ -801,11 +786,40 @@ export const getProgress = async (event: APIGatewayProxyEvent): Promise<APIGatew
 
     // Buscar as perguntas já respondidas por este participante
     const answeredResult = await query(
-      'SELECT question_id FROM participant_answers WHERE participant_id = $1',
+      'SELECT question_id, answered_at FROM participant_answers WHERE participant_id = $1 ORDER BY answered_at ASC',
       [participant.id]
     );
 
     const answeredQuestionIds = answeredResult.rows.map(row => row.question_id);
+
+    // Verificar se o tempo do PARTICIPANTE expirou (baseado na primeira resposta dele)
+    let timeExpired = false;
+    let remainingSeconds = -1;
+    const totalQuestionCount = parseInt(quiz.question_count) || 0;
+    const totalTimeSecondsForQuiz = (quiz.time_limit || 30) * totalQuestionCount;
+
+    if (answeredResult.rows.length > 0) {
+      // Participante já começou - calcular expiração baseado na primeira resposta
+      const participantStartedAt = new Date(answeredResult.rows[0].answered_at);
+      const now = new Date();
+      const elapsedSeconds = Math.floor((now.getTime() - participantStartedAt.getTime()) / 1000);
+      const totalTimeWithMargin = totalTimeSecondsForQuiz + 30;
+
+      if (elapsedSeconds > totalTimeWithMargin) {
+        timeExpired = true;
+        remainingSeconds = 0;
+      } else {
+        remainingSeconds = Math.max(0, totalTimeWithMargin - elapsedSeconds);
+      }
+    } else {
+      // Participante ainda não começou - tempo total disponível
+      remainingSeconds = totalTimeSecondsForQuiz + 30;
+    }
+
+    // Se o tempo expirou, retornar erro
+    if (timeExpired) {
+      return errorResponse('O tempo do quiz expirou', 410, { timeExpired: true });
+    }
 
     // Encontrar o índice da primeira pergunta não respondida
     let nextQuestionIndex = 0;
@@ -819,14 +833,6 @@ export const getProgress = async (event: APIGatewayProxyEvent): Promise<APIGatew
         nextQuestionIndex = questionsResult.rows.length;
       }
     }
-
-    // Calcular tempo restante do quiz
-    const totalQuestionCount = parseInt(quiz.question_count) || 0;
-    const totalTimeSecondsForQuiz = (quiz.time_limit || 30) * totalQuestionCount;
-    const startedAt = new Date(quiz.started_at);
-    const now = new Date();
-    const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-    const remainingSeconds = Math.max(0, totalTimeSecondsForQuiz + 30 - elapsedSeconds);
 
     return successResponse({
       participantId: participant.id,
