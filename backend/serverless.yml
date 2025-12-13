@@ -121,6 +121,14 @@ functions:
           method: post
           cors: true
 
+  resetQuiz:
+    handler: src/handlers/quiz.reset
+    events:
+      - http:
+          path: /quizzes/{quizId}/reset
+          method: post
+          cors: true
+
   getQuizStatus:
     handler: src/handlers/quiz.getQuizStatus
     events:

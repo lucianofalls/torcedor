@@ -11,7 +11,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import api from '../config/api';
-import { saveAnonymousUser, addParticipatedQuiz, getAnonymousUser } from '../services/anonymousStorage';
+import { saveAnonymousUser, addParticipatedQuiz, getAnonymousUserByCpf } from '../services/anonymousStorage';
 
 type JoinQuizScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -27,17 +27,32 @@ const JoinQuizScreen: React.FC<Props> = ({ navigation }) => {
   const [cpf, setCpf] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasExistingUser, setHasExistingUser] = useState(false);
 
-  useEffect(() => {
-    // Auto-preencher CPF e nome se já existir no storage
-    loadSavedUser();
-  }, []);
+  // Busca usuário quando CPF fica válido (11 dígitos)
+  const handleCpfChange = async (text: string) => {
+    const formatted = formatCPF(text);
+    setCpf(formatted);
 
-  const loadSavedUser = async () => {
-    const user = await getAnonymousUser();
-    if (user) {
-      setCpf(formatCPF(user.cpf));
-      setName(user.name);
+    const cleaned = text.replace(/\D/g, '');
+
+    // Quando CPF tiver 11 dígitos, buscar no storage
+    if (cleaned.length === 11) {
+      const user = await getAnonymousUserByCpf(cleaned);
+      if (user) {
+        setName(user.name);
+        setHasExistingUser(true);
+      } else {
+        // CPF novo, limpar nome e permitir edição
+        setName('');
+        setHasExistingUser(false);
+      }
+    } else {
+      // CPF incompleto, permitir edição do nome
+      if (hasExistingUser) {
+        setName('');
+        setHasExistingUser(false);
+      }
     }
   };
 
@@ -223,18 +238,19 @@ const JoinQuizScreen: React.FC<Props> = ({ navigation }) => {
       <TextInput
         style={styles.input}
         value={cpf}
-        onChangeText={(text) => setCpf(formatCPF(text))}
+        onChangeText={handleCpfChange}
         placeholder="CPF"
         keyboardType="numeric"
         maxLength={14}
       />
 
       <TextInput
-        style={styles.input}
+        style={[styles.input, hasExistingUser && styles.inputDisabled]}
         value={name}
         onChangeText={setName}
         placeholder="Nome Completo"
         autoCapitalize="words"
+        editable={!hasExistingUser}
       />
 
       <TouchableOpacity
@@ -249,9 +265,15 @@ const JoinQuizScreen: React.FC<Props> = ({ navigation }) => {
         )}
       </TouchableOpacity>
 
-      <Text style={styles.infoText}>
-        Seu CPF será usado apenas para evitar participações duplicadas
-      </Text>
+      {hasExistingUser ? (
+        <Text style={styles.infoTextLocked}>
+          📌 Seu nome foi recuperado automaticamente
+        </Text>
+      ) : (
+        <Text style={styles.infoText}>
+          Seu CPF será usado apenas para evitar participações duplicadas
+        </Text>
+      )}
     </View>
   );
 };
@@ -284,6 +306,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
+  inputDisabled: {
+    backgroundColor: '#f0f0f0',
+    color: '#666',
+  },
   button: {
     backgroundColor: '#34C759',
     padding: 15,
@@ -302,6 +328,13 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 20,
     fontStyle: 'italic',
+  },
+  infoTextLocked: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#007AFF',
+    marginTop: 20,
+    fontWeight: '500',
   },
 });
 

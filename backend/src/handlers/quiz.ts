@@ -849,3 +849,59 @@ export const getProgress = async (event: APIGatewayProxyEvent): Promise<APIGatew
     return errorResponse('Erro ao buscar progresso', 500, error);
   }
 };
+
+// Reset quiz - deleta participantes e respostas, volta status para draft
+export const reset = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const token = extractToken(event.headers.Authorization || event.headers.authorization);
+    if (!token) {
+      return errorResponse('Token não fornecido', 401);
+    }
+
+    const payload = verifyToken(token);
+    const quizId = event.pathParameters?.quizId || event.pathParameters?.id;
+
+    if (!quizId) {
+      return errorResponse('ID do quiz não fornecido', 400);
+    }
+
+    // Verificar se o quiz pertence ao usuário
+    const quizResult = await query(
+      'SELECT id, creator_id, title FROM quizzes WHERE id = $1',
+      [quizId]
+    );
+
+    if (quizResult.rows.length === 0) {
+      return errorResponse('Quiz não encontrado', 404);
+    }
+
+    if (quizResult.rows[0].creator_id !== payload.userId) {
+      return errorResponse('Você não tem permissão para resetar este quiz', 403);
+    }
+
+    // Deletar respostas dos participantes
+    await query(
+      `DELETE FROM participant_answers
+       WHERE participant_id IN (SELECT id FROM quiz_participants WHERE quiz_id = $1)`,
+      [quizId]
+    );
+
+    // Deletar participantes
+    await query('DELETE FROM quiz_participants WHERE quiz_id = $1', [quizId]);
+
+    // Resetar status do quiz para draft
+    await query(
+      `UPDATE quizzes SET status = 'draft', started_at = NULL, finished_at = NULL WHERE id = $1`,
+      [quizId]
+    );
+
+    return successResponse({
+      message: 'Quiz resetado com sucesso',
+      quizId,
+      title: quizResult.rows[0].title
+    });
+  } catch (error) {
+    console.error('Reset quiz error:', error);
+    return errorResponse('Erro ao resetar quiz', 500, error);
+  }
+};

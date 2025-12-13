@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import api from '../config/api';
 import { Quiz, Question, AnswerResult } from '../types';
-import { getAnonymousUser } from '../services/anonymousStorage';
+import { getAnonymousUser, clearAllAnonymousData } from '../services/anonymousStorage';
 import { useAuth } from '../contexts/AuthContext';
 
 type PlayQuizScreenNavigationProp = NativeStackNavigationProp<
@@ -41,6 +41,8 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
   const [anonymousCpf, setAnonymousCpf] = useState<string | null>(null);
   const [timerStarted, setTimerStarted] = useState(false);
   const [readyToPlay, setReadyToPlay] = useState(false); // Flag para indicar que todas as verificações terminaram
+  const isSubmittingRef = useRef(false); // Ref para evitar múltiplos submits simultâneos
+  const quizEndedRef = useRef(false); // Ref para indicar que o quiz terminou (tempo expirou, já respondeu, etc)
 
   useEffect(() => {
     initializeQuiz();
@@ -78,7 +80,24 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
           const thisQuiz = quizzes.find((q: any) => q.id === quizId);
 
           if (thisQuiz) {
+            // Verificar se o tempo expirou para este participante
+            if (thisQuiz.timeExpired) {
+              quizEndedRef.current = true;
+              Alert.alert(
+                'Tempo Expirado',
+                'O tempo para completar este quiz já expirou.',
+                [
+                  {
+                    text: 'Ver Ranking',
+                    onPress: () => navigation.replace('Leaderboard', { quizId }),
+                  },
+                ]
+              );
+              return false;
+            }
+
             if (thisQuiz.isCompleted) {
+              quizEndedRef.current = true;
               Alert.alert(
                 'Quiz já concluído',
                 'Você já participou e completou este quiz. Não é possível jogar novamente.',
@@ -194,13 +213,15 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
 
   useEffect(() => {
     // Só iniciar o timer se ele foi efetivamente iniciado e timeLeft não é null
-    if (timeLeft !== null && timerStarted) {
+    if (timeLeft !== null && timerStarted && !quizEndedRef.current) {
       if (timeLeft > 0) {
         const timer = setTimeout(() => {
-          setTimeLeft(timeLeft - 1);
+          if (!quizEndedRef.current) {
+            setTimeLeft(timeLeft - 1);
+          }
         }, 1000);
         return () => clearTimeout(timer);
-      } else if (timeLeft === 0 && !loading && !submitting) {
+      } else if (timeLeft === 0 && !loading && !submitting && !isSubmittingRef.current) {
         handleSubmit();
       }
     }
@@ -232,15 +253,24 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const handleSubmit = async () => {
+    // Evitar múltiplos submits simultâneos usando ref (atualiza imediatamente)
+    if (isSubmittingRef.current || quizEndedRef.current) {
+      return;
+    }
+
     // Quando o tempo acaba sem opção selecionada, pula para próxima pergunta
     if (!selectedOption && timeLeft === 0) {
+      isSubmittingRef.current = true; // Bloqueia novos submits
       Alert.alert(
         'Tempo Esgotado!',
         'Você não respondeu a tempo. Próxima pergunta...',
         [
           {
             text: 'OK',
-            onPress: handleNextQuestion,
+            onPress: () => {
+              isSubmittingRef.current = false;
+              handleNextQuestion();
+            },
           },
         ]
       );
@@ -253,6 +283,7 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
+    isSubmittingRef.current = true;
     setSubmitting(true);
     try {
       const timeTaken = Date.now() - startTime;
@@ -292,16 +323,21 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
       // Não mostrar erro se for problema de token/autenticação após salvar
       if (error.response?.status === 401 || error.response?.status === 403) {
         // Pula para próxima mesmo com erro de autenticação
+        isSubmittingRef.current = false;
         handleNextQuestion();
       } else if (errorMessage.includes('já respondeu') || errorMessage.includes('already answered')) {
         // Pergunta já foi respondida - pular para próxima
         Alert.alert(
           'Pergunta já respondida',
           'Você já respondeu esta pergunta. Avançando para a próxima...',
-          [{ text: 'OK', onPress: handleNextQuestion }]
+          [{ text: 'OK', onPress: () => {
+            isSubmittingRef.current = false;
+            handleNextQuestion();
+          }}]
         );
       } else if (errorMessage.includes('tempo') || errorMessage.includes('expirou') || errorMessage.includes('expired')) {
         // Tempo expirado - ir para leaderboard
+        quizEndedRef.current = true; // Marca que o quiz acabou
         Alert.alert(
           'Tempo Expirado',
           'O tempo deste quiz já expirou.',
@@ -309,26 +345,67 @@ const PlayQuizScreen: React.FC<Props> = ({ navigation, route }) => {
         );
       } else {
         Alert.alert('Erro', errorMessage || 'Erro ao enviar resposta');
+        isSubmittingRef.current = false;
       }
     } finally {
       setSubmitting(false);
+      // Só reseta a ref se o quiz não terminou
+      if (!quizEndedRef.current) {
+        isSubmittingRef.current = false;
+      }
     }
   };
 
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
     if (quiz && quiz.questions && currentQuestionIndex < quiz.questions.length - 1) {
       // Resetar timer para próxima pergunta
       setTimerStarted(false);
       setTimeLeft(null);
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
-      Alert.alert('Quiz Finalizado!', `Sua pontuação final: ${score} pontos`, [
-        {
-          text: 'Ver Ranking',
-          onPress: () =>
-            navigation.replace('Leaderboard', { quizId }),
-        },
-      ]);
+      // Quiz finalizado - parar o timer imediatamente
+      quizEndedRef.current = true;
+      setTimerStarted(false);
+      setTimeLeft(null);
+
+      if (!user && anonymousCpf) {
+        // Usuário anônimo - não mostrar ranking (estraga a surpresa)
+        // Limpar cache e voltar à tela inicial
+        Alert.alert(
+          'Quiz Finalizado! 🎉',
+          `Parabéns! Sua pontuação final: ${score} pontos\n\nO ranking será divulgado em breve pelo organizador.`,
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                try {
+                  await clearAllAnonymousData();
+                } catch (error) {
+                  console.error('Error clearing anonymous data:', error);
+                }
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        // Usuário logado - mostrar ranking
+        Alert.alert(
+          'Quiz Finalizado!',
+          `Sua pontuação final: ${score} pontos`,
+          [
+            {
+              text: 'Ver Ranking',
+              onPress: () => navigation.replace('Leaderboard', { quizId }),
+            },
+          ],
+          { cancelable: false }
+        );
+      }
     }
   };
 
