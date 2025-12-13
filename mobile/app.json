@@ -2,7 +2,7 @@
   "expo": {
     "name": "MinhaTorcida",
     "slug": "minha-torcida",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.minhatorcida.app",
       "icon": "./assets/icon.png",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSCameraUsageDescription": "Este app precisa de acesso à câmera para tirar fotos de perfil.",
         "NSPhotoLibraryUsageDescription": "Este app precisa de acesso às fotos para selecionar imagens de perfil.",
